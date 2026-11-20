@@ -15,9 +15,9 @@ Commands:
   install      Add the claude-n hook line to your zsh rc
   uninstall    Remove the claude-n hook line from your zsh rc
   init         Print shell integration (usage: claude-n init zsh)
-  ls           List configured accounts (not yet implemented)
-  rm           Remove an account (not yet implemented)
-  which        Show the config dir for an account (not yet implemented)
+  ls           List configured accounts and who is logged in
+  rm           Remove an account (usage: claude-n rm <N> [--yes])
+  which        Show the config dir for an account (usage: claude-n which <N>)
 
 Options:
   -h, --help       Show this help and exit
@@ -116,6 +116,135 @@ cmd_uninstall() {
   echo "claude-n: removed hook line from $rc"
 }
 
+# Account home: same resolution as the zsh handler in init_zsh.
+account_home() {
+  printf '%s\n' "${CLAUDE_N_HOME:-$HOME/.claude-n}"
+}
+
+# Validate an account number and print it normalized (leading zeros stripped,
+# exactly like the handler's $((10#n))). Rejects non-numeric input and 0.
+normalize_account() {
+  local cmd=$1 raw=${2:-}
+  if [[ ! "$raw" =~ ^[0-9]+$ ]]; then
+    echo "claude-n $cmd: account must be a number (got '${raw}')" >&2
+    return 2
+  fi
+  local n=$((10#$raw))
+  if (( n == 0 )); then
+    echo "claude-n $cmd: account must be 1 or greater (got '${raw}')" >&2
+    return 2
+  fi
+  printf '%s\n' "$n"
+}
+
+cmd_which() {
+  if [[ $# -ne 1 ]]; then
+    echo "usage: claude-n which <N>" >&2
+    return 2
+  fi
+  local n
+  n=$(normalize_account which "$1") || return $?
+  if (( n < 2 )); then
+    echo "account 1 is the default Claude config (no managed dir; uses your normal Claude config location)"
+    return 0
+  fi
+  printf '%s/%s\n' "$(account_home)" "$n"
+}
+
+# Best-effort email from <dir>/.claude.json at oauthAccount.emailAddress,
+# without jq. Newlines are flattened so a pretty-printed file works; the
+# oauthAccount object is flat, so its first closing brace ends it. Prints
+# nothing when the file or the email is absent.
+account_email() {
+  local file="$1/.claude.json" block
+  [[ -f "$file" ]] || return 0
+  block=$(tr -d '\n' < "$file" 2>/dev/null \
+    | grep -o '"oauthAccount"[[:space:]]*:[[:space:]]*{[^}]*}' | head -n 1 || true)
+  [[ -n "$block" ]] || return 0
+  printf '%s\n' "$block" \
+    | grep -o '"emailAddress"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 \
+    | sed 's/.*:[[:space:]]*"\(.*\)"$/\1/' || true
+}
+
+cmd_ls() {
+  local home entry name email found=0
+  home=$(account_home)
+  if [[ -d "$home" ]]; then
+    # Numeric-only names are accounts; .trash-* backups and stray dirs are skipped.
+    while IFS= read -r name; do
+      entry="$home/$name"
+      email=$(account_email "$entry")
+      printf '%-4s %s\n' "$name" "${email:-not logged in}"
+      found=1
+    done < <(
+      for entry in "$home"/*/; do
+        [[ -d "$entry" ]] || continue
+        name=$(basename "$entry")
+        [[ "$name" =~ ^[0-9]+$ ]] && printf '%s\n' "$name"
+      done | sort -n
+    )
+  fi
+  if (( found == 0 )); then
+    echo "no accounts under $home"
+  fi
+  return 0
+}
+
+cmd_rm() {
+  local assume_yes=0 arg raw="" n home dir stamp trash answer
+  for arg in "$@"; do
+    case "$arg" in
+      -y|--yes) assume_yes=1 ;;
+      -*)
+        echo "claude-n rm: unknown option: $arg" >&2
+        return 2
+        ;;
+      *)
+        if [[ -n "$raw" ]]; then
+          echo "usage: claude-n rm <N> [--yes]" >&2
+          return 2
+        fi
+        raw=$arg
+        ;;
+    esac
+  done
+  if [[ -z "$raw" ]]; then
+    echo "usage: claude-n rm <N> [--yes]" >&2
+    return 2
+  fi
+  n=$(normalize_account rm "$raw") || return $?
+  if (( n < 2 )); then
+    echo "claude-n rm: refusing to remove account 1 (the default has no managed dir)" >&2
+    return 1
+  fi
+  home=$(account_home)
+  dir="$home/$n"
+  if [[ ! -d "$dir" ]]; then
+    echo "claude-n rm: account $n not found at $dir" >&2
+    return 1
+  fi
+  if (( assume_yes == 0 )); then
+    printf "Remove account %s (%s)? A backup is kept in %s/.trash-*. [y/N] " "$n" "$dir" "$home" >&2
+    answer=""
+    read -r answer || true
+    case "$answer" in
+      y|Y|yes|YES|Yes) ;;
+      *)
+        echo "claude-n rm: aborted" >&2
+        return 1
+        ;;
+    esac
+  fi
+  stamp=$(date +%Y%m%d%H%M%S)
+  trash="$home/.trash-$n-$stamp"
+  # Never overwrite an existing backup from the same second.
+  while [[ -e "$trash" ]]; do
+    trash="$trash-$$"
+  done
+  mv -- "$dir" "$trash"
+  echo "claude-n: removed account $n; backup kept at $trash"
+}
+
 main() {
   if [[ $# -eq 0 ]]; then
     usage
@@ -139,8 +268,16 @@ main() {
     uninstall)
       cmd_uninstall
       ;;
-    ls|rm|which)
-      echo "claude-n $1: not yet implemented"
+    ls)
+      cmd_ls
+      ;;
+    rm)
+      shift
+      cmd_rm "$@"
+      ;;
+    which)
+      shift
+      cmd_which "$@"
       ;;
     *)
       echo "claude-n: unknown command: $1" >&2
