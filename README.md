@@ -52,7 +52,7 @@ For each account N of 2 or more, claude-n creates `~/.claude-n/N` and launches C
 
 Account 1 sets no override, so it uses Claude Code's default config location.
 
-To keep account directories somewhere other than `~/.claude-n`, set `CLAUDE_N_HOME`. Set it in your shell environment, for example in `.zshrc` above the `eval` line.
+To keep account directories somewhere other than `~/.claude-n`, set `CLAUDE_N_HOME`. Export it, for example `export CLAUDE_N_HOME=~/accounts` in `.zshrc` above the `eval` line. It must be exported: `ls`, `rm`, and `which` run as child processes and only see exported variables, so an unexported value makes the shell hook and the CLI disagree about where accounts live.
 
 ## Commands
 
@@ -63,7 +63,7 @@ To keep account directories somewhere other than `~/.claude-n`, set `CLAUDE_N_HO
 | `claude-n init zsh` | Print the zsh integration. The rc line evaluates this output. |
 | `claude-n ls` | List accounts under `~/.claude-n` with the email each is logged in as, or `not logged in`. |
 | `claude-n rm <N> [--yes]` | Remove account N. Asks for confirmation unless you pass `--yes`. Refuses account 1. |
-| `claude-n which <N>` | Print the config directory for account N. |
+| `claude-n which <N>` | Print the config directory for account N. For account 1, prints a note that it uses the default Claude config (no managed directory). |
 | `claude-n --help`, `claude-n --version` | Show usage or the version. |
 
 `rm` moves `~/.claude-n/N` to `~/.claude-n/.trash-N-<timestamp>` instead of deleting it. That backup still holds the account's OAuth credentials, so delete it yourself when you no longer want them on disk.

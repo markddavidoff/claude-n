@@ -10,8 +10,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install bats
-        run: sudo apt-get update && sudo apt-get install -y bats
+      # The tests shell out to `zsh -c`, the lint step needs shellcheck, and the
+      # tests use `bats_require_minimum_version 1.5.0` / `run -NNN`, so pin bats.
+      - name: Install zsh and shellcheck
+        run: sudo apt-get update && sudo apt-get install -y zsh shellcheck
+
+      - name: Install bats (pinned)
+        run: sudo npm install -g bats@1.11.0
 
       - name: Lint
         run: shellcheck bin/claude-n

@@ -64,11 +64,44 @@ resolve() { zsh -c 'eval "$(bin/claude-n init zsh)"; if __claude_n_resolve "'"$1
   ln -s "$(command -v mkdir)" "$BATS_TEST_TMPDIR/nobin/mkdir"
   run -127 zsh -c 'eval "$(bin/claude-n init zsh)"; PATH="$BATS_TEST_TMPDIR/nobin"; claude2'
   [ "$status" -ne 0 ]
-  [[ "$output" == *"claude"*"not found"* ]]
+  [[ "$output" == *"claude"*"not found"* ]] || false
 }
 
 @test "init rejects a non-zsh shell" {
   run bin/claude-n init bash
   [ "$status" -ne 0 ]
-  [[ "$output" == *"zsh"* ]]
+  [[ "$output" == *"zsh"* ]] || false
+}
+
+@test "resolve works under setopt KSH_ARRAYS (emulate -L zsh)" {
+  run zsh -c 'setopt KSH_ARRAYS; eval "$(bin/claude-n init zsh)"; __claude_n_resolve claude7'
+  [ "$status" -eq 0 ]
+  [ "$output" = "$CLAUDE_N_HOME/7" ]
+}
+
+@test "claude7 launches under setopt KSH_ARRAYS" {
+  run zsh -c 'setopt KSH_ARRAYS; PATH="$SANE_PATH"; eval "$(bin/claude-n init zsh)"; claude7 hi'
+  [ "$status" -eq 0 ]
+  [ "$output" = "dir=$CLAUDE_N_HOME/7 args=hi" ]
+}
+
+@test "hyphen + leading-zero claude-007 launches account 7 and creates its dir" {
+  run zsh -c 'PATH="$SANE_PATH"; eval "$(bin/claude-n init zsh)"; claude-007 --flag x'
+  [ "$status" -eq 0 ]
+  [[ "$output" == "dir="*"/7 args=--flag x" ]] || false
+  [ "$output" = "dir=$CLAUDE_N_HOME/7 args=--flag x" ]
+  [ -d "$CLAUDE_N_HOME/7" ]
+}
+
+@test "digit count is bounded: 15 digits resolve, 16 digits pass through" {
+  [ "$(resolve claude999999999999999)" = "$CLAUDE_N_HOME/999999999999999" ]
+  [ "$(resolve claude1234567890123456)" = __PASSTHROUGH__ ]
+  [ "$(resolve claude-1234567890123456)" = __PASSTHROUGH__ ]
+}
+
+@test "claude2 with no claude on PATH leaves no stray account dir" {
+  mkdir -p "$BATS_TEST_TMPDIR/nobin"
+  ln -s "$(command -v mkdir)" "$BATS_TEST_TMPDIR/nobin/mkdir"
+  run -127 zsh -c 'eval "$(bin/claude-n init zsh)"; PATH="$BATS_TEST_TMPDIR/nobin"; claude2'
+  [ ! -e "$CLAUDE_N_HOME/2" ]
 }

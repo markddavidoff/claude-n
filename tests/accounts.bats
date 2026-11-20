@@ -145,3 +145,27 @@ JSON
   [ "$status" -eq 0 ]
   [ ! -d "$H/6" ]
 }
+
+@test "which and rm reject account numbers longer than 15 digits" {
+  run env CLAUDE_N_HOME="$H" bin/claude-n which 1234567890123456
+  [ "$status" -ne 0 ]
+  mkdir -p "$H/5"
+  run env CLAUDE_N_HOME="$H" bin/claude-n rm 1234567890123456 --yes
+  [ "$status" -ne 0 ]
+  [ -d "$H/5" ]
+  run env CLAUDE_N_HOME="$H" bin/claude-n which 999999999999999
+  [ "$status" -eq 0 ]
+  [ "$output" = "$H/999999999999999" ]
+}
+
+@test "ls prints no raw error for an unreadable .claude.json" {
+  [ "$(id -u)" -ne 0 ] || skip "root ignores file modes"
+  mkdir -p "$H/2"
+  printf '{"oauthAccount":{"emailAddress":"a@b.com"}}' > "$H/2/.claude.json"
+  chmod 000 "$H/2/.claude.json"
+  run env CLAUDE_N_HOME="$H" bin/claude-n ls
+  chmod 644 "$H/2/.claude.json"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"ermission"* ]] || false
+  [[ "$output" == *"2"*"not logged in"* ]] || false
+}

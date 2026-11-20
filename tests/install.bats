@@ -34,7 +34,7 @@ EVAL_LINE='eval "$(claude-n init zsh)"'
 
 @test "install prints a restart-shell / hash -r hint" {
   CLAUDE_N_RC="$BATS_TEST_TMPDIR/zshrc" run bin/claude-n install
-  [[ "$output" == *"hash -r"* ]]
+  [[ "$output" == *"hash -r"* ]] || false
 }
 
 @test "install defaults to \${ZDOTDIR}/.zshrc when CLAUDE_N_RC is unset" {
@@ -56,7 +56,7 @@ EVAL_LINE='eval "$(claude-n init zsh)"'
   CLAUDE_N_RC="$BATS_TEST_TMPDIR/zshrc" run bin/claude-n uninstall
   [ "$status" -eq 0 ]
   [ "$(wc -l < "$BATS_TEST_TMPDIR/zshrc" | tr -d ' ')" -eq 3 ]
-  ! grep -qxF "$EVAL_LINE" "$BATS_TEST_TMPDIR/zshrc"
+  ! grep -qxF "$EVAL_LINE" "$BATS_TEST_TMPDIR/zshrc" || false
   grep -qxF 'echo keep' "$BATS_TEST_TMPDIR/zshrc"
 }
 
@@ -64,4 +64,23 @@ EVAL_LINE='eval "$(claude-n init zsh)"'
   CLAUDE_N_RC="$BATS_TEST_TMPDIR/missing" run bin/claude-n uninstall
   [ "$status" -eq 0 ]
   [ ! -e "$BATS_TEST_TMPDIR/missing" ]
+}
+
+@test "uninstall leaves no temp file behind when the rc write fails" {
+  [ "$(id -u)" -ne 0 ] || skip "root ignores file modes"
+  # Shim mktemp so the temp file lands in a dir we can inspect (BSD mktemp
+  # ignores TMPDIR).
+  mkdir -p "$BATS_TEST_TMPDIR/tmpd" "$BATS_TEST_TMPDIR/shim"
+  cat > "$BATS_TEST_TMPDIR/shim/mktemp" <<SHIM
+#!/bin/sh
+f="$BATS_TEST_TMPDIR/tmpd/tmp.\$\$"
+: > "\$f"
+echo "\$f"
+SHIM
+  chmod +x "$BATS_TEST_TMPDIR/shim/mktemp"
+  printf 'echo keep\n%s\n' "$EVAL_LINE" > "$BATS_TEST_TMPDIR/zshrc"
+  chmod 444 "$BATS_TEST_TMPDIR/zshrc"
+  PATH="$BATS_TEST_TMPDIR/shim:$PATH" CLAUDE_N_RC="$BATS_TEST_TMPDIR/zshrc" run bin/claude-n uninstall
+  [ "$status" -ne 0 ]
+  [ -z "$(ls -A "$BATS_TEST_TMPDIR/tmpd")" ]
 }
