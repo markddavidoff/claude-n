@@ -1,5 +1,7 @@
 # claude-n
 
+[![CI](https://github.com/markddavidoff/claude-n/actions/workflows/ci.yml/badge.svg)](https://github.com/markddavidoff/claude-n/actions/workflows/ci.yml)
+
 Type `claude2` to run Claude Code as a second account, `claude3` for a third, and so on. Each number gets its own config directory, so accounts do not share credentials or settings. There is no per-account setup: the first time you run a new number, you run `/login` inside Claude Code.
 
 `claude1` is your normal account and uses your default Claude Code config.
