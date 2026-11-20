@@ -10,7 +10,9 @@
 @test "--help prints usage and lists subcommands" {
   run bin/claude-n --help
   [ "$status" -eq 0 ]
-  [[ "$output" == *"install"* && "$output" == *"init"* && "$output" == *"ls"* ]]
+  for sub in install uninstall init ls rm which; do
+    [[ "$output" =~ (^|$'\n')[[:space:]]+"$sub"[[:space:]] ]]
+  done
 }
 
 @test "unknown subcommand exits non-zero with a message" {
