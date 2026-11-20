@@ -14,7 +14,7 @@ Usage:
 Commands:
   install      Install claude-n (not yet implemented)
   uninstall    Remove claude-n (not yet implemented)
-  init         Set up shell integration (not yet implemented)
+  init         Print shell integration (usage: claude-n init zsh)
   ls           List configured accounts (not yet implemented)
   rm           Remove an account (not yet implemented)
   which        Show the config dir for an account (not yet implemented)
@@ -23,6 +23,54 @@ Options:
   -h, --help       Show this help and exit
   -v, --version    Show the version and exit
 EOF
+}
+
+# Print the zsh snippet that maps claudeN / claude-N to isolated config dirs.
+# The body is zsh, so it lives in a quoted heredoc (no expansion, not parsed
+# as bash).
+init_zsh() {
+  cat <<'ZSH_SNIPPET'
+# claude-n (zsh)
+if [[ -z ${__CLAUDE_N_INSTALLED:-} ]]; then
+  if typeset -f command_not_found_handler >/dev/null; then
+    eval "${$(typeset -f command_not_found_handler)/command_not_found_handler/__claude_n_prev_cnf}"
+  fi
+  typeset -g __CLAUDE_N_INSTALLED=1
+fi
+__claude_n_resolve() {
+  [[ "$1" =~ '^claude-?([0-9]+)$' ]] || return 1
+  local n=$((10#${match[1]}))            # strip leading zeros
+  (( n == 0 )) && return 1               # claude0 -> passthrough
+  (( n == 1 )) && { print -r -- default; return 0; }
+  print -r -- "${CLAUDE_N_HOME:-$HOME/.claude-n}/$n"; return 0
+}
+command_not_found_handler() {
+  local target
+  if target=$(__claude_n_resolve "$1"); then
+    [[ "$target" != default ]] && { mkdir -p "$target"; export CLAUDE_CONFIG_DIR="$target"; }
+    if (( $+commands[claude] )); then exec command claude "${@:2}"; fi
+    print -u2 -- "claude-n: 'claude' not found on PATH"; return 127
+  fi
+  if typeset -f __claude_n_prev_cnf >/dev/null; then __claude_n_prev_cnf "$@"; return $?; fi
+  print -u2 -- "zsh: command not found: $1"; return 127
+}
+ZSH_SNIPPET
+}
+
+cmd_init() {
+  case "${1:-}" in
+    zsh)
+      init_zsh
+      ;;
+    "")
+      echo "claude-n init: missing shell argument (supported: zsh)" >&2
+      return 2
+      ;;
+    *)
+      echo "claude-n init: unsupported shell: $1 (only zsh is supported)" >&2
+      return 2
+      ;;
+  esac
 }
 
 main() {
@@ -38,7 +86,11 @@ main() {
     -v|--version)
       echo "claude-n ${CLAUDE_N_VERSION}"
       ;;
-    install|uninstall|init|ls|rm|which)
+    init)
+      shift
+      cmd_init "$@"
+      ;;
+    install|uninstall|ls|rm|which)
       echo "claude-n $1: not yet implemented"
       ;;
     *)
