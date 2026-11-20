@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# claude-n: launch Claude Code under isolated per-account config directories.
+set -euo pipefail
+
+CLAUDE_N_VERSION="0.1.0"
+
+usage() {
+  cat <<EOF
+claude-n ${CLAUDE_N_VERSION}: run Claude Code under isolated per-account config dirs.
+
+Usage:
+  claude-n <command> [args...]
+
+Commands:
+  install      Install claude-n (not yet implemented)
+  uninstall    Remove claude-n (not yet implemented)
+  init         Set up shell integration (not yet implemented)
+  ls           List configured accounts (not yet implemented)
+  rm           Remove an account (not yet implemented)
+  which        Show the config dir for an account (not yet implemented)
+
+Options:
+  -h, --help       Show this help and exit
+  -v, --version    Show the version and exit
+EOF
+}
+
+main() {
+  if [[ $# -eq 0 ]]; then
+    usage
+    return 0
+  fi
+
+  case "$1" in
+    -h|--help)
+      usage
+      ;;
+    -v|--version)
+      echo "claude-n ${CLAUDE_N_VERSION}"
+      ;;
+    install|uninstall|init|ls|rm|which)
+      echo "claude-n $1: not yet implemented"
+      ;;
+    *)
+      echo "claude-n: unknown command: $1" >&2
+      echo "Run 'claude-n --help' for usage." >&2
+      return 2
+      ;;
+  esac
+}
+
+main "$@"
