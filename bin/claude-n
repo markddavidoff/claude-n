@@ -12,8 +12,8 @@ Usage:
   claude-n <command> [args...]
 
 Commands:
-  install      Install claude-n (not yet implemented)
-  uninstall    Remove claude-n (not yet implemented)
+  install      Add the claude-n hook line to your zsh rc
+  uninstall    Remove the claude-n hook line from your zsh rc
   init         Print shell integration (usage: claude-n init zsh)
   ls           List configured accounts (not yet implemented)
   rm           Remove an account (not yet implemented)
@@ -73,6 +73,49 @@ cmd_init() {
   esac
 }
 
+# The one line install/uninstall manage in the user's zsh rc. Single quotes keep
+# $(...) literal; it is matched and written as a fixed string, never a regex.
+# shellcheck disable=SC2016  # literal $(...) is intended
+RC_LINE='eval "$(claude-n init zsh)"'
+
+# rc file to edit: $CLAUDE_N_RC if set, else ${ZDOTDIR:-$HOME}/.zshrc.
+rc_path() {
+  printf '%s\n' "${CLAUDE_N_RC:-${ZDOTDIR:-$HOME}/.zshrc}"
+}
+
+cmd_install() {
+  local rc
+  rc=$(rc_path)
+  if [[ -f "$rc" ]] && grep -qxF -- "$RC_LINE" "$rc"; then
+    echo "claude-n: already installed in $rc"
+    return 0
+  fi
+  touch "$rc"
+  # If the file's last line lacks a newline, add one so the hook gets its own line.
+  if [[ -s "$rc" && -n "$(tail -c 1 "$rc")" ]]; then
+    printf '\n' >> "$rc"
+  fi
+  printf '%s\n' "$RC_LINE" >> "$rc"
+  echo "claude-n: added hook line to $rc"
+  echo "Restart your shell (or run 'exec zsh'), then run 'hash -r' to refresh the command cache."
+}
+
+cmd_uninstall() {
+  local rc tmp
+  rc=$(rc_path)
+  if [[ ! -f "$rc" ]] || ! grep -qxF -- "$RC_LINE" "$rc"; then
+    echo "claude-n: no hook line found in $rc"
+    return 0
+  fi
+  tmp=$(mktemp)
+  # grep -v exits 1 when nothing is left to print; that is fine here.
+  grep -vxF -- "$RC_LINE" "$rc" > "$tmp" || true
+  # Write through the original path (not mv) to keep its mode and any symlink.
+  cat "$tmp" > "$rc"
+  rm -f "$tmp"
+  echo "claude-n: removed hook line from $rc"
+}
+
 main() {
   if [[ $# -eq 0 ]]; then
     usage
@@ -90,7 +133,13 @@ main() {
       shift
       cmd_init "$@"
       ;;
-    install|uninstall|ls|rm|which)
+    install)
+      cmd_install
+      ;;
+    uninstall)
+      cmd_uninstall
+      ;;
+    ls|rm|which)
       echo "claude-n $1: not yet implemented"
       ;;
     *)
